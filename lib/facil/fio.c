@@ -5506,8 +5506,11 @@ void fio_unsubscribe(subscription_s *s) {
     fio_collection_s *c = ch->parent;
     uint64_t hashed = FIO_HASH_FN(
         ch->name, ch->name_len, &fio_postoffice.pubsub, &fio_postoffice.pubsub);
-    /* lock collection */
-    fio_lock(&c->lock);
+    /* lock collection,
+       need to try and throttle wait, to prevent deadlock with fio_subscribe */
+    while (fio_trylock(&c->lock)) {
+      fio_throttle_thread(100);
+    }
     /* test again within lock */
     if (fio_ls_embd_is_empty(&ch->subscriptions)) {
       fio_ch_set_remove(&c->channels, hashed, ch, NULL);
